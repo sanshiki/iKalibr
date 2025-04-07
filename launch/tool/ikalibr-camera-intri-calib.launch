@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="calib_target_config" default="$(find ikalibr)/config/checkerboard.yaml"/>
+    <arg name="input_bag_path" default="/home/iKalibr/src/iKalibr/data/checkerboard_calib_downsample.bag"/>
+    <arg name="output_path" default="/home/iKalibr/src/iKalibr/data/"/>
+    <arg name="camera_topics" default="/camera1/image_raw /camera2/image_raw"/>
+
+    <!-- downsample messages of a rostopic and store them to a new rosbag -->
+    <node pkg="ikalibr" type="ikalibr_camera_intri_calib" name="ikalibr_camera_intri_calib" output="screen">
+        <!-- the input rosbag -->
+        <param name="input_bag_path" value="$(arg input_bag_path)" type="string"/>
+        <!-- camera topics -->
+        <param name="camera_topics" value="$(arg camera_topics)" type="string"/>
+        <!-- the output rosbag -->
+        <param name="output_path" value="$(arg output_path)" type="string"/>
+        <!-- calibrate targets -->
+        <rosparam command="load" file="$(arg calib_target_config)" />
+    </node>
+
+</launch>
