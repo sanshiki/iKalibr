@@ -311,10 +311,18 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
     const auto &intri = _parMagr->INTRI.Camera.at(topic);
     auto undistoMapper = VisualUndistortionMap::Create(intri);
 
+    // downsample
+    int64_t N = 1000;
+    int64_t last_saved_time = -N;
+
     auto bar = std::make_shared<tqdm>();
     for (int i = 0; i != size; ++i) {
         bar->progress(i, size);
         const auto &frame = frames.at(i);
+        int64_t frame_time = frame->GetId();
+        if (frame_time - last_saved_time < N) continue;
+
+        last_saved_time = frame_time;
         // generate the image name
         std::string filename = std::to_string(frame->GetId()) + ".jpg";
         info.images[frame->GetId()] = filename;
@@ -355,8 +363,10 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
     // feature match
     std::ofstream matchPairFile(match_list_path, std::ios::out);
     for (const auto &[view1Id, view2Id] : matchRes) {
-        matchPairFile << std::to_string(view1Id) + ".jpg ";
-        matchPairFile << std::to_string(view2Id) + ".jpg" << std::endl;
+        if (info.images.count(view1Id) > 0 && info.images.count(view2Id) > 0) {  
+            matchPairFile << std::to_string(view1Id) + ".jpg ";
+            matchPairFile << std::to_string(view2Id) + ".jpg" << std::endl;
+        }
     }
     matchPairFile.close();
 
