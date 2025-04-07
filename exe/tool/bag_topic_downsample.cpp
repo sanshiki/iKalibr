@@ -41,9 +41,11 @@
 #include "filesystem"
 #include "rosbag/bag.h"
 #include "rosbag/view.h"
+#include <boost/foreach.hpp>
 
 namespace {
 bool IKALIBR_UNIQUE_NAME(_2_) = ns_ikalibr::_1_(__FILE__);
+#define foreach BOOST_FOREACH
 }
 
 int main(int argc, char **argv) {
@@ -117,6 +119,21 @@ int main(int argc, char **argv) {
             }
         }
         spdlog::info("write message of topic '{}' finished!", topic);
+        dstBag->close();
+        srcBag->close();
+
+        // move other messages
+        srcBag->open(iBagPath, rosbag::BagMode::Read);
+        dstBag->open(oBagPath, rosbag::BagMode::Append);
+        rosbag::View view2(*srcBag);
+        std::string excluded_topic = topic;
+        foreach(rosbag::MessageInstance const m, view2) {
+            const std::string& topic = m.getTopic();
+
+            if(excluded_topic != topic) {
+                dstBag->write(topic, m.getTime(), m);
+            }
+        }
         dstBag->close();
         srcBag->close();
 
