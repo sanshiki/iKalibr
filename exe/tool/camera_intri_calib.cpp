@@ -30,16 +30,6 @@ std::vector<std::string> splitTopics(const std::string& str) {
     return result;
 }
 
-void writeMatToYAML(YAML::Emitter& out, const cv::Mat& mat) {
-    out << YAML::Flow << YAML::BeginSeq;
-    for (int i = 0; i < mat.rows; i++) {
-        for (int j = 0; j < mat.cols; j++) {
-            out << mat.at<double>(i, j);
-        }
-    }
-    out << YAML::EndSeq;
-}
-
 void writeCameraIntrinsicsYaml(
     const std::string& filename,
     const cv::Size& image_size,
@@ -119,17 +109,6 @@ void calibrateCameraForTopic(const std::string& topic, const std::vector<std::ve
     file_name_topic.erase(0,1);
     std::replace(file_name_topic.begin(), file_name_topic.end(), '/', '-');
     std::string filename = output_path + file_name_topic + "-intri.yaml"; // 去掉 `/` 避免文件名问题
-    // std::ofstream fout(filename);
-
-    // YAML::Emitter out;
-    // out << YAML::BeginMap;
-    // writeMatToYAML(out, camera_matrix);
-    // writeMatToYAML(out, dist_coeffs);
-    // out << YAML::Key << "reprojection_error" << YAML::Value << error;
-    // out << YAML::EndMap;
-
-    // fout << out.c_str();
-    // fout.close();
     writeCameraIntrinsicsYaml(filename, image_size, camera_matrix, dist_coeffs);
     ROS_INFO("Calibration for %s saved to %s", topic.c_str(), filename.c_str());
 }
@@ -181,10 +160,7 @@ int main(int argc, char **argv) {
         }
         
         std::map<std::string, cv_calib_struct> cv_calib_struct_map;
-        // std::map<std::string, std::vector<std::vector<cv::Point2f>>> image_points_map;
-        // std::map<std::string, cv::Size> image_size_map;
-    
-        // std::vector<std::vector<cv::Point3f>> object_points;
+
         std::vector<cv::Point3f> objp;
     
         for (int i = 0; i < target_rows; i++) {
@@ -217,7 +193,6 @@ int main(int argc, char **argv) {
                 continue;
             }
     
-            // image_size_map[topic] = image.size();
             cv_calib_struct_map[topic].image_size = image.size();
     
             std::vector<cv::Point2f> corners;
@@ -226,12 +201,10 @@ int main(int argc, char **argv) {
             if (found) {
                 cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
                                  cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.01));
-                // image_points_map[topic].push_back(corners);
+
                 cv_calib_struct_map[topic].image_points.push_back(corners);
                 cv_calib_struct_map[topic].object_points.push_back(objp);
-                // if (image_points_map[topic].size() == 1) {
-                //     object_points.push_back(objp);
-                // }
+
                 cv::drawChessboardCorners(image, cv::Size(target_cols, target_rows), corners, found);
             } else {
                 failed_cnt++;
@@ -244,10 +217,6 @@ int main(int argc, char **argv) {
         spdlog::info("Extracting finished. [{}]", extract_rate);
     
         spdlog::info("Calibrating cameras...");
-        // 对每个相机单独标定
-        // for (const auto& entry : image_points_map) {
-        //     calibrateCameraForTopic(entry.first, entry.second, object_points, image_size_map[entry.first], output_path);
-        // }
         auto calib_bar = std::make_shared<tqdm>();
         bar_cnt = 0;
         for (const auto& entry : cv_calib_struct_map) {
