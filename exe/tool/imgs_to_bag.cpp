@@ -44,6 +44,7 @@
 #include "filesystem"
 #include "spdlog/fmt/bundled/color.h"
 #include "regex"
+#include "util/tqdm.h"
 
 namespace {
 bool IKALIBR_UNIQUE_NAME(_2_) = ns_ikalibr::_1_(__FILE__);
@@ -86,6 +87,10 @@ int main(int argc, char **argv) {
         auto downsampleNum =
             ns_ikalibr::GetParamFromROS<int>("/ikalibr_imgs_to_bag/downsample_num");
         spdlog::info("downsample images: grab an image per {} images to rosbag", downsampleNum);
+
+        auto scale =
+        ns_ikalibr::GetParamFromROS<double>("/ikalibr_imgs_to_bag/scale");
+        spdlog::info("scaling factor: resize image to {}", scale);
 
         auto filenames = ns_ikalibr::FilesInDir(imgPath);
 
@@ -144,22 +149,25 @@ int main(int argc, char **argv) {
         } else {
             ros::Time::init();
             auto imgFrequency =
-                ns_ikalibr::GetParamFromROS<int>("/ikalibr_imgs_to_bag/img_frequency");
+                ns_ikalibr::GetParamFromROS<double>("/ikalibr_imgs_to_bag/img_frequency");
             spdlog::info("if not use name as time stamp, the frequency is: '{}'", imgFrequency);
             const double dt = 1.0 / imgFrequency;
 
             for (int i = 0; i < static_cast<int>(filenames.size()); ++i) {
-                timestamps.at(i) = i * dt;
+                timestamps.at(i) = i * dt + ros::Time::now().toSec();
             }
         }
 
-        auto imgFrequency = ns_ikalibr::GetParamFromROS<int>("/ikalibr_imgs_to_bag/img_frequency");
+        auto imgFrequency = ns_ikalibr::GetParamFromROS<double>("/ikalibr_imgs_to_bag/img_frequency");
         spdlog::info("if not use name as time stamp, the frequency is: '{}'", imgFrequency);
 
         auto dstBag = std::make_unique<rosbag::Bag>();
         dstBag->open(bagPath, rosbag::BagMode::Write);
 
+        auto bar = std::make_shared<tqdm>();
+        int bar_cnt = 0;
         for (int i = 0; i < static_cast<int>(filenames.size()); ++i) {
+            bar->progress(bar_cnt++, static_cast<int>(filenames.size()));
             // downsample
             if (i % downsampleNum != 0) {
                 continue;
@@ -176,8 +184,19 @@ int main(int argc, char **argv) {
             spdlog::info("filename: '{}', time: '{:.3f}'",
                          std::filesystem::path(filename).filename().string(), time);
 
+            // resize image
+            cv::Size newSize(img.cols * scale, img.rows * scale);
+            cv::Mat resized;
+            cv::Mat resized_gray;
+            if (scale != 1.0)
+                cv::resize(img, resized, newSize);
+            else
+                resized = img;
+
+            // cv::cvtColor(resized, resized_gray, cv::COLOR_BGR2GRAY);
+
             cv_bridge::CvImage cvImage;
-            cvImage.image = img;
+            cvImage.image = resized;
             cvImage.header.stamp = ros::Time(time);
             cvImage.encoding = encoding;
 
@@ -185,6 +204,7 @@ int main(int argc, char **argv) {
             cvImage.toImageMsg(sensorImage);
             dstBag->write(imgsTopic, cvImage.header.stamp, sensorImage);
         }
+        bar->finish();
 
         dstBag->close();
         spdlog::info("images in '{}' have been writen to rosbag as '{}'!", imgPath, bagPath);

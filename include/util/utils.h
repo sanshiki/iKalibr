@@ -334,6 +334,9 @@ bool _1_(const std::string &a);
     bool IKALIBR_UNIQUE_NAME(_2_) = ns_ikalibr::_1_(__FILE__); \
     }
 _3_
+
+std::vector<std::string> SplitTopics(const std::string& str);
+
 }  // namespace ns_ikalibr
 
 #endif  // IKALIBR_UTILS_H
