@@ -358,4 +358,14 @@ void PutTextOnCVMat(cv::Mat &img,
                                 const cv::Scalar &color) {
     PutTextOnCVMat(img, str, cv::Point2d(pt(0), pt(1)), xBias, yBias, color);
 }
+
+std::vector<std::string> SplitTopics(const std::string& str) {
+    std::vector<std::string> result;
+    std::istringstream iss(str);
+    std::string token;
+    while (iss >> token) {
+        result.push_back(token);
+    }
+    return result;
+}
 }  // namespace ns_ikalibr

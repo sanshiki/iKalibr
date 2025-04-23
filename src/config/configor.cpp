@@ -93,6 +93,7 @@ double Configor::Prior::GravityNorm = {};
 double Configor::Prior::TimeOffsetPadding = {};
 double Configor::Prior::ReadoutTimePadding = {};
 double Configor::Prior::MapDownSample = {};
+int Configor::Prior::SFMImageNum = 100;
 
 double Configor::Prior::KnotTimeDist::SO3Spline = {};
 double Configor::Prior::KnotTimeDist::ScaleSpline = {};
@@ -294,7 +295,7 @@ void Configor::PrintMainFields() {
         DESC_FIELD(DataStream::BeginTime), DESC_FIELD(DataStream::Duration),
         DESC_FIELD(DataStream::OutputPath), DESC_FIELD(Prior::GravityNorm),
         DESC_FIELD(Prior::OptTemporalParams), DESC_FIELD(Prior::TimeOffsetPadding),
-        DESC_FIELD(Prior::ReadoutTimePadding), DESC_FIELD(Prior::MapDownSample),
+        DESC_FIELD(Prior::ReadoutTimePadding), DESC_FIELD(Prior::MapDownSample), DESC_FIELD(Prior::SFMImageNum),
         DESC_FIELD(Prior::KnotTimeDist::SO3Spline), DESC_FIELD(Prior::KnotTimeDist::ScaleSpline),
         DESC_FIELD(Prior::NDTLiDAROdometer::Resolution),
         DESC_FIELD(Prior::NDTLiDAROdometer::KeyFrameDownSample),

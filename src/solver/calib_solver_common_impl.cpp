@@ -53,6 +53,8 @@
 #include "viewer/viewer.h"
 #include "core/haste_data_io.h"
 #include "core/event_preprocessing.h"
+#include <fstream>
+#include <iomanip>
 
 namespace {
 bool IKALIBR_UNIQUE_NAME(_2_) = ns_ikalibr::_1_(__FILE__);
@@ -354,6 +356,12 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
     const std::string &output_path = *ws;
 
     auto logger = spdlog::basic_logger_mt("sfm_cmd", *ws + "/sfm-command-line.txt", true);
+    const std::string cmd_bash_path = ns_ikalibr::Configor::DataStream::OutputPath + "/sfm-command-line.sh";
+
+    fstream cmd_bash;
+
+    cmd_bash.open(cmd_bash_path, ios::app);
+
     // feature extractor
     logger->info(
         "command line for 'feature_extractor' in colmap for topic '{}':\n"
@@ -365,6 +373,15 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
         "--ImageReader.camera_params {:.3f},{:.3f},{:.3f},{:.3f}\n",
         topic, database_path, image_path, intri->FocalX(), intri->FocalY(),
         intri->PrincipalPoint()(0), intri->PrincipalPoint()(1));
+
+    cmd_bash << "colmap feature_extractor"
+            << " --database_path " << database_path
+            << " --image_path " << image_path
+            << " --ImageReader.camera_model PINHOLE"
+            << " --ImageReader.single_camera 1"
+            << " --ImageReader.camera_params " << std::fixed << std::setprecision(3)
+            << intri->FocalX() << "," << intri->FocalY() << "," << intri->PrincipalPoint()(0) << "," << intri->PrincipalPoint()(1)
+            << std::endl;
 
     // feature match
     std::ofstream matchPairFile(match_list_path, std::ios::out);
@@ -383,6 +400,11 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
         "--match_list_path {} "
         "--match_type pairs\n",
         topic, database_path, match_list_path);
+
+    cmd_bash << "colmap matches_importer"
+            << " --database_path " << database_path
+            << " --match_list_path " << match_list_path
+            << " --match_type pairs" << std::endl;
 
     logger->info(
         "---------------------------------------------------------------------------------");
@@ -428,6 +450,12 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
     logger->info(
         "---------------------------------------------------------------------------------\n");
 
+
+    cmd_bash << "glomap mapper"
+            << " --database_path " << database_path
+            << " --image_path " << image_path
+            << " --output_path " << output_path << std::endl;
+
     // format convert
     logger->info(
         "command line for 'model_converter' in colmap for topic '{}':\n"
@@ -437,7 +465,14 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
         "--output_type TXT\n",
         topic, output_path + "/0", output_path);
     logger->flush();
+
+    cmd_bash << "colmap model_converter"
+            << " --input_path " << (output_path + "/0")
+            << " --output_path " << output_path
+            << " --output_type TXT" << std::endl;
+
     spdlog::drop("sfm_cmd");
+    cmd_bash.close();
 
     std::ofstream file(ns_ikalibr::Configor::DataStream::GetImageStoreInfoFile(topic));
     auto ar = GetOutputArchiveVariant(file, Configor::Preference::OutputDataFormat);
