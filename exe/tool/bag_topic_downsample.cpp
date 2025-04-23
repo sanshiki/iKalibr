@@ -66,9 +66,10 @@ int main(int argc, char **argv) {
             spdlog::info("the path of rosbag: '{}'", iBagPath);
         }
 
-        auto topic = ns_ikalibr::GetParamFromROS<std::string>(
+        std::string topics = ns_ikalibr::GetParamFromROS<std::string>(
             "/ikalibr_bag_topic_downsample/topic_to_downsample");
-        spdlog::info("ros topic to down sampled: '{}'", topic);
+        spdlog::info("ros topic to down sampled: '{}'", topics);
+        std::vector<std::string> topics_vec = ns_ikalibr::SplitTopics(topics);
 
         auto oBagPath = ns_ikalibr::GetParamFromROS<std::string>(
             "/ikalibr_bag_topic_downsample/output_bag_path");
@@ -85,52 +86,61 @@ int main(int argc, char **argv) {
         if (frequency < 1E-3) {
             spdlog::error("invalid desired frequency: '{:.3f}'", frequency);
         } else {
-            spdlog::info("the desired frequency of topic '{}': '{:.3f}'", topic, frequency);
+            spdlog::info("the desired frequency of topic '{}': '{:.3f}'", topics, frequency);
         }
 
         // open rosbag
         auto srcBag = std::make_unique<rosbag::Bag>();
         srcBag->open(iBagPath, rosbag::BagMode::Read);
-        auto view = rosbag::View();
-        view.addQuery(*srcBag, rosbag::TopicQuery(topic));
-        spdlog::info("load message of topic '{}' and sort them by timestamps...", topic);
-        std::list<rosbag::View::iterator> msgs;
-        for (auto iter = view.begin(); iter != view.end(); ++iter) {
-            msgs.push_back(iter);
-        }
-        struct {
-            bool operator()(const rosbag::View::iterator &i1,
-                            const rosbag::View::iterator &i2) const {
-                return i1->getTime().toSec() < i2->getTime().toSec();
-            }
-        } customLess;
-        // sort messages according to the time stamps
-        msgs.sort(customLess);
-
         auto dstBag = std::make_unique<rosbag::Bag>();
         dstBag->open(oBagPath, rosbag::BagMode::Write);
-        double lastTimeSed = msgs.front()->getTime().toSec();
-        const double DeltaTime = 1.0 / frequency;
-        spdlog::info("write message of topic '{}'...", topic);
-        for (const auto &iter : msgs) {
-            if (iter->getTime().toSec() - lastTimeSed > DeltaTime) {
-                dstBag->write(topic, iter->getTime(), *iter, iter->getConnectionHeader());
-                lastTimeSed = iter->getTime().toSec();
+        dstBag->close();
+        dstBag->open(oBagPath, rosbag::BagMode::Append);
+
+        foreach(auto topic, topics_vec) {
+            
+            auto view = rosbag::View();
+            view.addQuery(*srcBag, rosbag::TopicQuery(topic));
+            spdlog::info("load message of topic '{}' and sort them by timestamps...", topic);
+            std::list<rosbag::View::iterator> msgs;
+            for (auto iter = view.begin(); iter != view.end(); ++iter) {
+                msgs.push_back(iter);
             }
+            struct {
+                bool operator()(const rosbag::View::iterator &i1,
+                                const rosbag::View::iterator &i2) const {
+                    return i1->getTime().toSec() < i2->getTime().toSec();
+                }
+            } customLess;
+            // sort messages according to the time stamps
+            msgs.sort(customLess);
+
+            double lastTimeSed = msgs.front()->getTime().toSec();
+            const double DeltaTime = 1.0 / frequency;
+            spdlog::info("write message of topic '{}'...", topic);
+            for (const auto &iter : msgs) {
+                if (iter->getTime().toSec() - lastTimeSed > DeltaTime) {
+                    dstBag->write(topic, iter->getTime(), *iter, iter->getConnectionHeader());
+                    lastTimeSed = iter->getTime().toSec();
+                }
+            }
+            spdlog::info("write message of topic '{}' finished!", topic);
         }
-        spdlog::info("write message of topic '{}' finished!", topic);
         dstBag->close();
         srcBag->close();
 
         // move other messages
+        srcBag = std::make_unique<rosbag::Bag>();
+        dstBag = std::make_unique<rosbag::Bag>();
         srcBag->open(iBagPath, rosbag::BagMode::Read);
         dstBag->open(oBagPath, rosbag::BagMode::Append);
         rosbag::View view2(*srcBag);
-        std::string excluded_topic = topic;
         foreach(rosbag::MessageInstance const m, view2) {
             const std::string& topic = m.getTopic();
 
-            if(excluded_topic != topic) {
+            auto it = std::find(topics_vec.begin(), topics_vec.end(), topic);
+
+            if(it == topics_vec.end()) {
                 dstBag->write(topic, m.getTime(), m);
             }
         }
