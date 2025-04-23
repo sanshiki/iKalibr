@@ -12,23 +12,13 @@
 #include "util/utils_tpl.hpp"
 #include "filesystem"
 #include "util/tqdm.h"
+#include "util/utils.h"
 
 typedef struct {
     std::vector<std::vector<cv::Point2f>> image_points;
     std::vector<std::vector<cv::Point3f>> object_points;
     cv::Size image_size;
 } cv_calib_struct;
-
-
-std::vector<std::string> splitTopics(const std::string& str) {
-    std::vector<std::string> result;
-    std::istringstream iss(str);
-    std::string token;
-    while (iss >> token) {
-        result.push_back(token);
-    }
-    return result;
-}
 
 void writeCameraIntrinsicsYaml(
     const std::string& filename,
@@ -61,8 +51,6 @@ void writeCameraIntrinsicsYaml(
 
     // Focal length (fx, fy)
     out << YAML::Comment("fx, fy");
-    out << YAML::Comment("we have to admit that these intrinsic parameters are poorly calibrated due to our");
-    out << YAML::Comment("careless operation, however, these intrinsics would be refined in ikalibr");
     out << YAML::Key << "focal_length" << YAML::Value <<  YAML::BeginSeq
         << camera_matrix.at<double>(0, 0) << camera_matrix.at<double>(1, 1)
         << YAML::EndSeq;
@@ -93,7 +81,7 @@ void writeCameraIntrinsicsYaml(
 }
 
 
-void calibrateCameraForTopic(const std::string& topic, const std::vector<std::vector<cv::Point2f>>& image_points,
+void calibrateCameraForTopic(const std::string& topic,const std::string& type, const std::vector<std::vector<cv::Point2f>>& image_points,
     const std::vector<std::vector<cv::Point3f>>& object_points, const cv::Size& image_size, const std::string output_path) {
     if (image_points.size() < 10) {
         ROS_WARN("Not enough valid chessboard images for topic: %s", topic.c_str());
@@ -102,7 +90,15 @@ void calibrateCameraForTopic(const std::string& topic, const std::vector<std::ve
 
     cv::Mat camera_matrix, dist_coeffs;
     std::vector<cv::Mat> rvecs, tvecs;
-    double error = cv::calibrateCamera(object_points, image_points, image_size, camera_matrix, dist_coeffs, rvecs, tvecs);
+    double error;
+    if(type == "pinhole_brown_t2")
+        error = cv::calibrateCamera(object_points, image_points, image_size, camera_matrix, dist_coeffs, rvecs, tvecs);
+    else if(type == "pinhole_fisheye")
+        error = cv::fisheye::calibrate(object_points, image_points, image_size, camera_matrix, dist_coeffs, rvecs, tvecs,
+            cv::fisheye::CALIB_RECOMPUTE_EXTRINSIC |
+            cv::fisheye::CALIB_CHECK_COND |
+            cv::fisheye::CALIB_FIX_SKEW,
+            cv::TermCriteria(3, 20, 1e-6));
 
     // 输出 YAML 文件
     std::string file_name_topic = topic;
@@ -133,7 +129,11 @@ int main(int argc, char **argv) {
         std::string camera_topics = ns_ikalibr::GetParamFromROS<std::string>(
             "/ikalibr_camera_intri_calib/camera_topics"
         );
-        std::vector<std::string> camera_topics_vec = splitTopics(camera_topics);
+        std::vector<std::string> camera_topics_vec = ns_ikalibr::SplitTopics(camera_topics);
+
+        std::string camera_type = ns_ikalibr::GetParamFromROS<std::string>(
+            "/ikalibr_camera_intri_calib/camera_type"
+        );
 
         std::string target_type = ns_ikalibr::GetParamFromROS<std::string>(
             "/ikalibr_camera_intri_calib/target_type"
@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
     
         for (int i = 0; i < target_rows; i++) {
             for (int j = 0; j < target_cols; j++) {
-                objp.push_back(cv::Point3f(j, i, 0));
+                objp.push_back(cv::Point3f(j*square_size, i*square_size, 0));
             }
         }
     
@@ -222,6 +222,7 @@ int main(int argc, char **argv) {
         for (const auto& entry : cv_calib_struct_map) {
             calib_bar->progress(bar_cnt++, cv_calib_struct_map.size());
             calibrateCameraForTopic(entry.first, 
+                                    camera_type,
                                     entry.second.image_points,
                                     entry.second.object_points, 
                                     entry.second.image_size, 
