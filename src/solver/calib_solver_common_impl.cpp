@@ -311,9 +311,15 @@ void CalibSolver::StoreImagesForSfM(const std::string &topic,
     const auto &intri = _parMagr->INTRI.Camera.at(topic);
     auto undistoMapper = VisualUndistortionMap::Create(intri);
 
+    int64_t duration = frames.at(frames.size()-1)->GetId() - frames.at(0)->GetId();
+
     // downsample
-    int64_t N = 1000;
+    int64_t N = duration / Configor::Prior::SFMImageNum;
     int64_t last_saved_time = -N;
+
+    spdlog::info(
+        "downsample rate: {}",
+        std::to_string(N));
 
     auto bar = std::make_shared<tqdm>();
     for (int i = 0; i != size; ++i) {

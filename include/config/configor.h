@@ -260,6 +260,7 @@ public:
         static double TimeOffsetPadding;
         static double ReadoutTimePadding;
         static double MapDownSample;
+        static int SFMImageNum;
 
         static struct KnotTimeDist {
             static double SO3Spline;
@@ -319,6 +320,7 @@ public:
             ar(CEREAL_NVP(SpatTempPrioriPath), CEREAL_NVP(GravityNorm),
                CEREAL_NVP(OptTemporalParams), CEREAL_NVP(TimeOffsetPadding),
                CEREAL_NVP(ReadoutTimePadding), CEREAL_NVP(MapDownSample),
+               CEREAL_NVP(SFMImageNum),
                cereal::make_nvp("KnotTimeDist", knotTimeDist),
                cereal::make_nvp("NDTLiDAROdometer", ndtLiDAROdometer),
                cereal::make_nvp("LiDARDataAssociate", lidarDataAssociate));
